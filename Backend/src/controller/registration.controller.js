@@ -2,6 +2,7 @@ import ApiError from "../utils/ApiError.js";
 import AssyncHandler from "../utils/AssyncHandler.js";
 import ApiRes from "../utils/ApiRes.js";
 import { User } from "../models/User.model.js";
+import {sendRegistrationEmail} from "../service/email.service.js"
 
 const register = AssyncHandler(async (req, res) => {
   const { username, fullname, password, email } = req.body;
@@ -57,7 +58,12 @@ const login = AssyncHandler(async (req, res) => {
 
   const userdata= await User.findById(user._id).select("-password ");
 
+  
+
   res.status(200).cookie("token",token).json(new ApiRes(200,{userdata,token},"user Loggedin !!"));
+  await sendRegistrationEmail(user.email,user.fullname);
+
+  
 });
 
 export { register, login };
