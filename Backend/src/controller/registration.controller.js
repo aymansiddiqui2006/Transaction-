@@ -32,7 +32,7 @@ const register = AssyncHandler(async (req, res) => {
     throw new ApiError(500, "user is not created!! server side error");
   }
 
-  res.status(201).json(new ApiRes(201, userData, "user created !!"));
+  return res.status(201).json(new ApiRes(201, userData, "user created !!"));
 });
 
 const login = AssyncHandler(async (req, res) => {
@@ -60,7 +60,7 @@ const login = AssyncHandler(async (req, res) => {
 
   
 
-  res.status(200).cookie("token",token).json(new ApiRes(200,{userdata,token},"user Loggedin !!"));
+  return res.status(200).cookie("token",token).json(new ApiRes(200,{userdata,token},"user Loggedin !!"));
   await sendRegistrationEmail(user.email,user.fullname);
 
   

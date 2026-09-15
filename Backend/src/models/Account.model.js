@@ -1,29 +1,65 @@
-import mongoose from "mongoose"
-const accountSchema = new mongoose.Schema({
+import mongoose from "mongoose";
+import { Ledger } from "../models/Ledger.model.js";
+const accountSchema = new mongoose.Schema(
+  {
     user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: [ true, "Account must be associated with a user" ],
-        index: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "Account must be associated with a user"],
+      index: true,
     },
     status: {
-        type: String,
-        enum: {
-            values: [ "ACTIVE", "FROZEN", "CLOSED" ],
-            message: "Status can be either ACTIVE, FROZEN or CLOSED",
-        },
-        default: "ACTIVE"
+      type: String,
+      enum: {
+        values: ["active", "frozen", "closed"],
+        message: "Status can be either ACTIVE, FROZEN or CLOSED",
+      },
+      default: "active",
     },
     currency: {
-        type: String,
-        required: [ true, "Currency is required for creating an account" ],
-        default: "INR"
-    }
-}, {
-    timestamps: true
-})
+      type: String,
+      required: [true, "Currency is required for creating an account"],
+      default: "INR",
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
 
-accountSchema.index({ user: 1, status: 1 })
+accountSchema.index({ user: 1, status: 1 });
 
+accountSchema.methods.getBalance = async function () {
+  const balanceData = await ledgerModel.aggregate([
+    { $match: { account: this._id } },
+    {
+      $group: {
+        _id: null,
+        totalDebit: {
+          $sum: {
+            $cond: [{ $eq: ["$type", "DEBIT"] }, "$amount", 0],
+          },
+        },
+        totalCredit: {
+          $sum: {
+            $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0],
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        balance: { $subtract: ["$totalCredit", "$totalDebit"] },
+      },
+    },
+  ]);
 
-export const Account= mongoose.model("Account",accountSchema);
+  if (balanceData.length === 0) {
+    return 0;
+  }
+
+  return balanceData[0].balance;
+};
+
+export const Account = mongoose.model("Account", accountSchema);
