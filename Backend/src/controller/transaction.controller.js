@@ -69,34 +69,34 @@ const createTransaction = AssyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
-  const transaction = await Transaction.create(
+  const [transaction] = await Transaction.create([
     {
       fromAccount,
       toAccount,
       status: "pending",
       amount,
       idempotencyKey,
-    },
+    }],
     { session },
-  );
+  )[0];
 
-  const debitEntry = await Ledger.create(
+  const debitEntry = await Ledger.create([
     {
       account: FromAccount,
       amount: amount,
       transaction: transaction._id,
       type: "DEBIT",
-    },
+    }],
     { session },
   );
 
-  const creditEntry = await Ledger.create(
+  const creditEntry = await Ledger.create([
     {
       account: ToAccount,
       amount: amount,
       type: "CREDIT",
       transaction: transaction._id,
-    },
+    }],
     { session },
   );
 
@@ -113,7 +113,67 @@ const createTransaction = AssyncHandler(async (req, res) => {
     toAccount,
   );
 
-  return res.status(200).json(new ApiRes(200,"Transaction completed successfully"));
+  return res
+    .status(200)
+    .json(new ApiRes(200, "Transaction completed successfully"));
 });
 
-export { createTransaction };
+const createInitialFundsTransaction = AssyncHandler(async (req, res) => {
+  const { toAccount, amount, idempotencyKey } = req.body;
+
+  if (!toAccount || !amount || !idempotencyKey) {
+    throw new ApiError(400, "All fields are required!! ");
+  }
+
+  const ToAccount = await Account.findOne({ _id: toAccount });
+
+  if (!ToAccount) {
+    throw new ApiError(400, "Invalid toAccount");
+  }
+
+  const FromAccount = await Account.findOne({
+    user: req.user._id,
+  });
+  if (!FromAccount) {
+    throw new ApiError(400, "Invalid System Account");
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  const transaction = new Transaction(
+    {
+      fromAccount: FromAccount,
+      toAccount,
+      amount,
+      idempotencyKey,
+      status: "pending",
+    },
+  );  
+
+   const debitLedgerEntry = await Ledger.create([ {
+        account: FromAccount._id,
+        amount: amount,
+        transaction: transaction._id,
+        type: "DEBIT"
+    } ], { session })
+
+    const creditLedgerEntry = await Ledger.create([ {
+        account: toAccount,
+        amount: amount,
+        transaction: transaction._id,
+        type: "CREDIT"
+    } ], { session })
+
+    transaction.status = "complete"
+    await transaction.save({ session })
+
+    await session.commitTransaction()
+    session.endSession()
+
+    return res.status(201).json(new ApiRes(201,transaction,"Initial funds transaction completed successfully"))
+
+
+});
+
+export { createTransaction, createInitialFundsTransaction };
